@@ -493,7 +493,7 @@
       <div id="dataTableWrapper">
         <table class="data-table">
           <thead>
-            <tr><th>Date</th><th>Weight</th><th>Change</th><th>Water</th></tr>
+            <tr><th>Date</th><th>Time</th><th>Weight</th><th>Δ</th><th>Water</th></tr>
           </thead>
           <tbody id="dataBody"></tbody>
         </table>
@@ -591,21 +591,18 @@ async function submitData() {
   btn.disabled = true;
   btn.textContent = 'Saving...';
 
+  const now = new Date();
   const entry = {
-    date: new Date().toISOString().split('T')[0],
-    time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+    id: now.getTime().toString(),
+    date: now.toISOString().split('T')[0],
+    time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
     weight: weight,
     water: waterCount,
     userId: config.userId
   };
 
-  // Save locally
-  const existing = entries.findIndex(e => e.date === entry.date);
-  if (existing >= 0) {
-    entries[existing] = entry;
-  } else {
-    entries.push(entry);
-  }
+  // Always append — never overwrite
+  entries.push(entry);
   saveLocalData();
 
   // Push to Google Sheets
@@ -640,7 +637,10 @@ async function fetchFromSheet() {
     const res = await fetch(config.apiUrl + '?action=get&userId=' + config.userId);
     const data = await res.json();
     if (data && data.length) {
-      entries = data;
+      // Merge: use sheet data as source of truth, add any local entries not yet synced
+      const sheetIds = new Set(data.map(e => e.id).filter(Boolean));
+      const unsynced = entries.filter(e => e.id && !sheetIds.has(e.id));
+      entries = [...data, ...unsynced];
       saveLocalData();
       renderDashboard();
     }
@@ -680,11 +680,16 @@ function exportLocal() {
 // ── Dashboard Rendering ──
 function renderDashboard() {
   if (!entries.length) {
-    document.getElementById('dataBody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text-dim)">No data yet — log your first entry!</td></tr>';
+    document.getElementById('dataBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-dim)">No data yet — log your first entry!</td></tr>';
     return;
   }
 
-  const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
+  const sorted = [...entries].sort((a, b) => {
+    const cmp = a.date.localeCompare(b.date);
+    if (cmp !== 0) return cmp;
+    // Same date: sort by id (timestamp) or time
+    return (a.id || '0').localeCompare(b.id || '0');
+  });
 
   // Stats
   const latest = sorted[sorted.length - 1];
@@ -703,14 +708,16 @@ function renderDashboard() {
   renderWeightChart(filtered);
   renderWaterChart(filtered);
 
-  // Table
-  const recent = [...sorted].reverse().slice(0, 10);
+  // Table — show last 20 entries
+  const recent = [...sorted].reverse().slice(0, 20);
   document.getElementById('dataBody').innerHTML = recent.map((e, i) => {
-    const prev = sorted[sorted.indexOf(e) - 1];
+    const idx = sorted.indexOf(e);
+    const prev = idx > 0 ? sorted[idx - 1] : null;
     const diff = prev ? (e.weight - prev.weight).toFixed(1) : '--';
     const cls = diff > 0 ? 'change-neg' : diff < 0 ? 'change-pos' : '';
     return `<tr>
       <td>${formatDate(e.date)}</td>
+      <td style="color:var(--text-dim)">${e.time || '--'}</td>
       <td>${e.weight} kg</td>
       <td class="${cls}">${diff !== '--' ? (diff > 0 ? '+' : '') + diff : '--'}</td>
       <td>${e.water || 0} 💧</td>
