@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Body Metrics Tracker</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface-2: #1a1a26;
+    --border: #2a2a3a;
+    --text: #e8e8f0;
+    --text-dim: #6a6a80;
+    --accent: #4ade80;
+    --accent-dim: rgba(74, 222, 128, 0.1);
+    --blue: #60a5fa;
+    --blue-dim: rgba(96, 165, 250, 0.1);
+    --orange: #fb923c;
+    --orange-dim: rgba(251, 146, 60, 0.1);
+    --radius: 16px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .grain {
+    position: fixed; inset: 0; z-index: 9999; pointer-events: none; opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  }
+
+  .app { max-width: 480px; margin: 0 auto; padding: 16px; padding-bottom: 100px; }
+
+  /* Header */
+  .header {
+    text-align: center;
+    padding: 32px 0 24px;
+    position: relative;
+  }
+  .header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 20%; right: 20%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+  }
+  .header h1 {
+    font-family: 'Instrument Serif', serif;
+    font-size: 2rem;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    margin-bottom: 4px;
+  }
+  .header .subtitle {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+  }
+  .status-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-right: 6px;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin: 24px 0 20px;
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 4px;
+    border: 1px solid var(--border);
+  }
+  .tab {
+    flex: 1;
+    padding: 10px;
+    text-align: center;
+    font-size: 0.75rem;
+    font-family: 'DM Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border: none;
+    background: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.3s;
+  }
+  .tab.active {
+    background: var(--surface-2);
+    color: var(--text);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+  }
+  .card-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+  }
+
+  /* Weight Input */
+  .weight-display {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 4px;
+    margin: 16px 0;
+  }
+  .weight-display input {
+    font-family: 'Instrument Serif', serif;
+    font-size: 4rem;
+    width: 180px;
+    text-align: right;
+    background: none;
+    border: none;
+    color: var(--text);
+    outline: none;
+    caret-color: var(--accent);
+  }
+  .weight-display input::placeholder { color: var(--surface-2); }
+  .weight-display .unit {
+    font-size: 1.2rem;
+    color: var(--text-dim);
+    font-family: 'DM Mono', monospace;
+  }
+
+  /* Water Counter */
+  .water-section { text-align: center; }
+  .water-count {
+    font-family: 'Instrument Serif', serif;
+    font-size: 5rem;
+    line-height: 1;
+    margin: 12px 0;
+    color: var(--blue);
+  }
+  .water-controls {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 16px;
+  }
+  .water-btn {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Mono', monospace;
+  }
+  .water-btn:active {
+    transform: scale(0.9);
+    background: var(--blue-dim);
+    border-color: var(--blue);
+  }
+  .water-label {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  /* Submit Button */
+  .submit-btn {
+    width: 100%;
+    padding: 16px;
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-top: 8px;
+  }
+  .submit-btn:active {
+    transform: scale(0.98);
+    background: var(--accent);
+    color: var(--bg);
+  }
+  .submit-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  /* Stats Row */
+  .stats-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 12px;
+    text-align: center;
+  }
+  .stat-value {
+    font-family: 'Instrument Serif', serif;
+    font-size: 1.6rem;
+    margin-bottom: 2px;
+  }
+  .stat-value.green { color: var(--accent); }
+  .stat-value.blue { color: var(--blue); }
+  .stat-value.orange { color: var(--orange); }
+  .stat-label {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+  }
+
+  /* Chart */
+  .chart-container {
+    height: 200px;
+    position: relative;
+    margin: 12px 0;
+  }
+  canvas { width: 100% !important; height: 100% !important; }
+
+  /* Data Table */
+  .data-table {
+    width: 100%;
+    font-size: 0.75rem;
+  }
+  .data-table th {
+    text-align: left;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-weight: 400;
+  }
+  .data-table td {
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(42, 42, 58, 0.4);
+  }
+  .data-table .change-pos { color: var(--accent); }
+  .data-table .change-neg { color: var(--orange); }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--accent);
+    color: var(--bg);
+    padding: 12px 24px;
+    border-radius: 100px;
+    font-size: 0.75rem;
+    font-family: 'DM Mono', monospace;
+    z-index: 1000;
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    white-space: nowrap;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* Setup Panel */
+  .setup-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .setup-panel label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--text-dim);
+    display: block;
+    margin-bottom: 8px;
+  }
+  .setup-panel input[type="text"] {
+    width: 100%;
+    padding: 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    outline: none;
+    margin-bottom: 16px;
+  }
+  .setup-panel input[type="text"]:focus {
+    border-color: var(--accent);
+  }
+  .setup-panel .hint {
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    margin-top: -12px;
+    margin-bottom: 16px;
+    line-height: 1.6;
+  }
+
+  /* Section Visibility */
+  .section { display: none; }
+  .section.active { display: block; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* Period Selector */
+  .period-selector {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 12px;
+  }
+  .period-btn {
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: none;
+    color: var(--text-dim);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .period-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  .nfc-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--accent-dim);
+    border: 1px solid rgba(74, 222, 128, 0.2);
+    border-radius: 100px;
+    font-size: 0.65rem;
+    color: var(--accent);
+    margin-top: 12px;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    line-height: 1.8;
+  }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<div class="app">
+  <div class="header">
+    <h1>Body Metrics</h1>
+    <div class="subtitle"><span class="status-dot"></span>Live Tracking</div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('input')">Log</button>
+    <button class="tab" onclick="switchTab('dashboard')">Dashboard</button>
+    <button class="tab" onclick="switchTab('setup')">Setup</button>
+  </div>
+
+  <!-- INPUT TAB -->
+  <div id="tab-input" class="section active">
+    <div class="card">
+      <div class="card-label">⚖ Today's Weight</div>
+      <div class="weight-display">
+        <input type="number" id="weightInput" placeholder="0.0" step="0.1" inputmode="decimal">
+        <span class="unit">kg</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">💧 Water Intake</div>
+      <div class="water-section">
+        <div class="water-count" id="waterCount">0</div>
+        <div class="water-label">glasses (250ml each)</div>
+        <div class="water-controls">
+          <button class="water-btn" onclick="adjustWater(-1)">−</button>
+          <button class="water-btn" onclick="adjustWater(1)">+</button>
+        </div>
+      </div>
+    </div>
+
+    <button class="submit-btn" id="submitBtn" onclick="submitData()">
+      Log Entry →
+    </button>
+
+    <div class="nfc-badge" style="text-align:center;display:flex;justify-content:center;margin-top:16px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M6 8.32a7.43 7.43 0 0 1 0 7.36"/><path d="M9.46 6.21a11.76 11.76 0 0 1 0 11.58"/>
+        <path d="M12.91 4.1a16.09 16.09 0 0 1 0 15.8"/><path d="M16.37 2a20.42 20.42 0 0 1 0 20"/>
+      </svg>
+      NFC Quick-Log Enabled
+    </div>
+  </div>
+
+  <!-- DASHBOARD TAB -->
+  <div id="tab-dashboard" class="section">
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value green" id="statCurrent">--</div>
+        <div class="stat-label">Current</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value orange" id="statChange">--</div>
+        <div class="stat-label">Change</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value blue" id="statWater">--</div>
+        <div class="stat-label">Avg Water</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Weight Trend</div>
+      <div class="period-selector">
+        <button class="period-btn active" onclick="setPeriod('7d', this)">7D</button>
+        <button class="period-btn" onclick="setPeriod('30d', this)">30D</button>
+        <button class="period-btn" onclick="setPeriod('90d', this)">90D</button>
+        <button class="period-btn" onclick="setPeriod('all', this)">All</button>
+      </div>
+      <div class="chart-container">
+        <canvas id="weightChart"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Water Intake</div>
+      <div class="chart-container">
+        <canvas id="waterChart"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Recent Entries</div>
+      <div id="dataTableWrapper">
+        <table class="data-table">
+          <thead>
+            <tr><th>Date</th><th>Weight</th><th>Change</th><th>Water</th></tr>
+          </thead>
+          <tbody id="dataBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETUP TAB -->
+  <div id="tab-setup" class="section">
+    <div class="setup-panel">
+      <label>Google Apps Script URL</label>
+      <input type="text" id="apiUrl" placeholder="https://script.google.com/macros/s/...">
+      <div class="hint">
+        Deploy Google Apps Script as a web app and paste the URL here. See the README for setup instructions.
+      </div>
+
+      <label>Your Name / ID</label>
+      <input type="text" id="userId" placeholder="e.g. john">
+      <div class="hint">Used to identify your data if sharing the sheet.</div>
+
+      <button class="submit-btn" onclick="saveSetup()" style="border-color:var(--blue);color:var(--blue);background:var(--blue-dim)">
+        Save Configuration
+      </button>
+    </div>
+
+    <div class="setup-panel" style="margin-top:16px">
+      <label>NFC Setup Instructions</label>
+      <div class="hint" style="margin-top:0;margin-bottom:0;line-height:2">
+        1. Get an NFC tag (NTAG215 recommended)<br>
+        2. Install "NFC Tools" app on your phone<br>
+        3. Write a URL record pointing to:<br>
+        <code style="color:var(--accent);font-size:0.7rem">https://YOUR-USERNAME.github.io/metrics/</code><br>
+        4. Stick the NFC tag near your weighing scale<br>
+        5. Tap your phone → auto-opens this page → log your weight!
+      </div>
+    </div>
+
+    <div class="setup-panel" style="margin-top:16px">
+      <label>Export / Debug</label>
+      <button class="submit-btn" onclick="exportLocal()" style="border-color:var(--orange);color:var(--orange);background:var(--orange-dim);margin-top:0">
+        Export Local Data as JSON
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+// ── State ──
+let waterCount = 0;
+let entries = [];
+let config = { apiUrl: '', userId: 'default' };
+let weightChart, waterChartInstance;
+let currentPeriod = '7d';
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded', () => {
+  loadConfig();
+  loadLocalData();
+  renderDashboard();
+
+  // Auto-fetch from sheet on load
+  if (config.apiUrl) fetchFromSheet();
+});
+
+// ── Tab Switching ──
+function switchTab(tab) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  event.target.classList.add('active');
+
+  if (tab === 'dashboard') renderDashboard();
+}
+
+// ── Water Controls ──
+function adjustWater(delta) {
+  waterCount = Math.max(0, waterCount + delta);
+  document.getElementById('waterCount').textContent = waterCount;
+  document.getElementById('waterCount').style.transform = 'scale(1.1)';
+  setTimeout(() => document.getElementById('waterCount').style.transform = 'scale(1)', 150);
+}
+
+// ── Submit Data ──
+async function submitData() {
+  const weight = parseFloat(document.getElementById('weightInput').value);
+  if (!weight || weight < 20 || weight > 300) {
+    showToast('Enter a valid weight (20-300 kg)');
+    return;
+  }
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  const entry = {
+    date: new Date().toISOString().split('T')[0],
+    time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+    weight: weight,
+    water: waterCount,
+    userId: config.userId
+  };
+
+  // Save locally
+  const existing = entries.findIndex(e => e.date === entry.date);
+  if (existing >= 0) {
+    entries[existing] = entry;
+  } else {
+    entries.push(entry);
+  }
+  saveLocalData();
+
+  // Push to Google Sheets
+  if (config.apiUrl) {
+    try {
+      await fetch(config.apiUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entry)
+      });
+      showToast('Logged & synced to sheet ✓');
+    } catch (e) {
+      showToast('Saved locally (sync failed)');
+    }
+  } else {
+    showToast('Saved locally — set API URL to sync');
+  }
+
+  // Reset
+  document.getElementById('weightInput').value = '';
+  waterCount = 0;
+  document.getElementById('waterCount').textContent = '0';
+  btn.disabled = false;
+  btn.textContent = 'Log Entry →';
+}
+
+// ── Fetch from Google Sheets ──
+async function fetchFromSheet() {
+  if (!config.apiUrl) return;
+  try {
+    const res = await fetch(config.apiUrl + '?action=get&userId=' + config.userId);
+    const data = await res.json();
+    if (data && data.length) {
+      entries = data;
+      saveLocalData();
+      renderDashboard();
+    }
+  } catch (e) {
+    console.log('Using local data');
+  }
+}
+
+// ── Local Storage ──
+function saveLocalData() { localStorage.setItem('bm_entries', JSON.stringify(entries)); }
+function loadLocalData() { entries = JSON.parse(localStorage.getItem('bm_entries') || '[]'); }
+function saveConfig() { localStorage.setItem('bm_config', JSON.stringify(config)); }
+function loadConfig() { 
+  config = JSON.parse(localStorage.getItem('bm_config') || '{}');
+  if (!config.apiUrl) config.apiUrl = '';
+  if (!config.userId) config.userId = 'default';
+  document.getElementById('apiUrl').value = config.apiUrl;
+  document.getElementById('userId').value = config.userId;
+}
+
+function saveSetup() {
+  config.apiUrl = document.getElementById('apiUrl').value.trim();
+  config.userId = document.getElementById('userId').value.trim() || 'default';
+  saveConfig();
+  showToast('Configuration saved ✓');
+  if (config.apiUrl) fetchFromSheet();
+}
+
+function exportLocal() {
+  const blob = new Blob([JSON.stringify(entries, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'body-metrics-export.json'; a.click();
+  showToast('Exported ✓');
+}
+
+// ── Dashboard Rendering ──
+function renderDashboard() {
+  if (!entries.length) {
+    document.getElementById('dataBody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text-dim)">No data yet — log your first entry!</td></tr>';
+    return;
+  }
+
+  const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
+
+  // Stats
+  const latest = sorted[sorted.length - 1];
+  const prev = sorted.length > 1 ? sorted[sorted.length - 2] : null;
+  const change = prev ? (latest.weight - prev.weight).toFixed(1) : '0.0';
+  const avgWater = (sorted.reduce((s, e) => s + (e.water || 0), 0) / sorted.length).toFixed(1);
+
+  document.getElementById('statCurrent').textContent = latest.weight + ' kg';
+  document.getElementById('statChange').textContent = (change > 0 ? '+' : '') + change + ' kg';
+  document.getElementById('statWater').textContent = avgWater + ' gl';
+
+  // Filter by period
+  const filtered = filterByPeriod(sorted, currentPeriod);
+
+  // Weight Chart
+  renderWeightChart(filtered);
+  renderWaterChart(filtered);
+
+  // Table
+  const recent = [...sorted].reverse().slice(0, 10);
+  document.getElementById('dataBody').innerHTML = recent.map((e, i) => {
+    const prev = sorted[sorted.indexOf(e) - 1];
+    const diff = prev ? (e.weight - prev.weight).toFixed(1) : '--';
+    const cls = diff > 0 ? 'change-neg' : diff < 0 ? 'change-pos' : '';
+    return `<tr>
+      <td>${formatDate(e.date)}</td>
+      <td>${e.weight} kg</td>
+      <td class="${cls}">${diff !== '--' ? (diff > 0 ? '+' : '') + diff : '--'}</td>
+      <td>${e.water || 0} 💧</td>
+    </tr>`;
+  }).join('');
+}
+
+function filterByPeriod(data, period) {
+  const now = new Date();
+  let cutoff = new Date();
+  if (period === '7d') cutoff.setDate(now.getDate() - 7);
+  else if (period === '30d') cutoff.setDate(now.getDate() - 30);
+  else if (period === '90d') cutoff.setDate(now.getDate() - 90);
+  else return data;
+
+  const cutoffStr = cutoff.toISOString().split('T')[0];
+  return data.filter(e => e.date >= cutoffStr);
+}
+
+function setPeriod(period, btn) {
+  currentPeriod = period;
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderDashboard();
+}
+
+function renderWeightChart(data) {
+  const ctx = document.getElementById('weightChart').getContext('2d');
+  if (weightChart) weightChart.destroy();
+
+  weightChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: data.map(e => formatDate(e.date)),
+      datasets: [{
+        data: data.map(e => e.weight),
+        borderColor: '#4ade80',
+        backgroundColor: 'rgba(74, 222, 128, 0.05)',
+        borderWidth: 2,
+        pointBackgroundColor: '#4ade80',
+        pointBorderColor: '#0a0a0f',
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        tension: 0.3,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          grid: { color: 'rgba(42,42,58,0.3)' },
+          ticks: { color: '#6a6a80', font: { family: 'DM Mono', size: 10 }, maxRotation: 45 }
+        },
+        y: {
+          grid: { color: 'rgba(42,42,58,0.3)' },
+          ticks: { color: '#6a6a80', font: { family: 'DM Mono', size: 10 }, callback: v => v + ' kg' }
+        }
+      }
+    }
+  });
+}
+
+function renderWaterChart(data) {
+  const ctx = document.getElementById('waterChart').getContext('2d');
+  if (waterChartInstance) waterChartInstance.destroy();
+
+  waterChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: data.map(e => formatDate(e.date)),
+      datasets: [{
+        data: data.map(e => e.water || 0),
+        backgroundColor: 'rgba(96, 165, 250, 0.4)',
+        borderColor: '#60a5fa',
+        borderWidth: 1,
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: '#6a6a80', font: { family: 'DM Mono', size: 10 }, maxRotation: 45 }
+        },
+        y: {
+          grid: { color: 'rgba(42,42,58,0.3)' },
+          ticks: { color: '#6a6a80', font: { family: 'DM Mono', size: 10 }, stepSize: 1 },
+          beginAtZero: true
+        }
+      }
+    }
+  });
+}
+
+function formatDate(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// ── Toast ──
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+</script>
+</body>
+</html>
